@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import os
 from turtle import title
 from flask import Flask, request, jsonify, abort
@@ -32,17 +33,21 @@ db_drop_and_create_all()
 @app.route('/drinks', methods=['GET'])
 def drinks():
 
-    drink_menu = Drink.query.all()
+    try:
+        drink_menu = Drink.query.all()
 
-    if drink_menu == 0:
-        abort(404)
-    
-    drinks = [drink.short() for drink in drink_menu]
+        if drink_menu == 0:
+            abort(404)
+        
+        drinks = [drink.short() for drink in drink_menu]
 
-    return jsonify({
-        "success": True,
-        "drinks": drinks
-    }), 200
+        return jsonify({
+            "success": True,
+            "drinks": drinks
+        }), 200
+    except Exception as e:
+        print(e)
+        abort(403)
 
 '''
 @TODO implement endpoint
@@ -56,17 +61,20 @@ def drinks():
 @app.route('/drinks-details', methods=['GET'])
 @requires_auth('get:drinks-details')
 def drinks_detail(payload):
+    try:
+        drink_menu = Drink.query.order_by(Drink.id).all()
+        if drink_menu == 0:
+            abort(404)
 
-    drink_menu = Drink.query.order_by(Drink.id).all()
-    if drink_menu == 0:
+        drinks = [drink.long() for drink in drink_menu]
+
+        return jsonify({
+            "success": True,
+            "drinks": drinks
+        })
+    except Exception as e:
+        print(e)
         abort(404)
-
-    drinks = [drink.long() for drink in drink_menu]
-
-    return jsonify({
-        "success": True,
-        "drinks": drinks
-    })
 
 
 '''
@@ -83,18 +91,18 @@ def drinks_detail(payload):
 @requires_auth('post:drinks')
 def add_drinks(payload):
     try:
-        body = request.json()
+        body = request.get_json()
         new_title = body.get('title', None)
-        new_recipe = body.get('recipes', None)
+        new_recipe = body.get('recipe', None)
 
-        newDrink = Drink(title=new_title, recipe= new_recipe)
+        newDrink = Drink(title=new_title, recipe=new_recipe)
         newDrink.insert()
 
-        drink = Drink.query.order_by(Drink.id == newDrink.id).long().one()
+        #drink = Drink.query.order_by(Drink.id == newDrink.id).one()
 
         return jsonify({
             "success": True,
-            "drinks": drink
+            "drinks": [newDrink.long()]
         })
     except Exception as e:
         print(e)
@@ -117,20 +125,19 @@ def add_drinks(payload):
 def update_drink(payload, drink_id):
     try:
         drink = Drink.query.filter(Drink.id == drink_id).one()
-        if drink == 0:
+
+        if drink is None:
             abort(404)
-        body = request.json()
-        edit_title = body.get('title','')
-        edit_recipe = body.get('recipe', '')
+        body = request.get_json()
+        print(body)
+        drink.title = body.get('title')
+        print(drink.title)
 
-        edit_drink = Drink(title=edit_title, recipe=edit_recipe)
-
-        edit_drink.update()
-        #edit_drink.long()
+        drink.update()
 
         return jsonify({
             "success": True,
-            "drinks": edit_drink.id.long()
+            "drinks": drink.long()
         })
     except Exception as e:
         print(e)
@@ -214,3 +221,10 @@ def server_error(error):
 @TODO implement error handler for AuthError
     error handler should conform to general task above
 '''
+@app.errorhandler(AuthError)
+def not_authenticated(auth_error):
+    return jsonify({
+        "success": False,
+        "error": auth_error.status_code,
+        "message": auth_error.error
+    }), 401
